@@ -14,6 +14,7 @@ describe CSVImporter do
     attribute :l_name
     attribute :confirmed_at
     attribute :created_by_user_id
+    attribute :birthdate
 
     validates_presence_of :email
     validates_format_of :email, with: /[^@]+@[^@]/ # contains one @ symbol
@@ -609,6 +610,56 @@ BOB@example.com,true,bob,,"
       expect(failed_row.model.errors[:email]).to include("'invalid' could not be found")
     end
   end
+
+  describe "config dup" do
+    it "has its own configuration arrays for each instance" do
+      import_1 = ImportUserCSV.new(content: "") do
+        after_save do
+          "foo"
+        end
+        after_build do
+          "something"
+        end
+      end
+
+      import_2 = ImportUserCSV.new(content: "") do
+        after_save do
+          "bar"
+        end
+
+        after_save do
+          "nothing"
+        end
+
+        column 'foo'
+        identifier 'foo'
+      end
+
+      expect(import_1.config.after_save_blocks).not_to equal(import_2.config.after_save_blocks)
+      expect(import_1.config.after_build_blocks).not_to equal(import_2.config.after_build_blocks)
+      expect(import_1.config.column_definitions).not_to equal(import_2.config.column_definitions)
+      expect(import_1.config.identifiers).not_to equal(import_2.config.identifiers)
+    end
+  end
+
+  describe "column metadata" do
+    it "should parse column metadata" do
+      csv_content = "email,first_name,last_name,birthdate[%d/%m/%y]
+                     bob@example.com,bob,,25/03/75
+                     invalid,bob,,"
+
+
+      import = ImportUserCSV.new(content: csv_content) do
+        column :birthdate, as: /birthdate/, to: ->(date_string, model, column) {
+          model.birthdate = Date.strptime(date_string, column.data) rescue nil
+        }
+      end
+
+      import.run!
+      expect(import.report.created_rows.first.model.birthdate).to eql(Date.parse('1975-03-25'))
+    end
+  end
+
 
   describe "skipping" do
     it "could skip via throw :skip" do

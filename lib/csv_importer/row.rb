@@ -44,14 +44,15 @@ module CSVImporter
         column_definition = column.definition
         next if column_definition.nil?
 
-        set_attribute(model, column_definition, value)
+        set_attribute(model, column, value)
       end
 
       model
     end
 
     # Set the attribute using the column_definition and the csv_value
-    def set_attribute(model, column_definition, csv_value)
+    def set_attribute(model, column, csv_value)
+      column_definition = column.definition
       if column_definition.to && column_definition.to.is_a?(Proc)
         to_proc = column_definition.to
 
@@ -60,8 +61,10 @@ module CSVImporter
           model.public_send("#{column_definition.name}=", to_proc.call(csv_value))
         when 2 # to: ->(published, post) { post.published_at = Time.now if published == "true" }
           to_proc.call(csv_value, model)
+        when 3 # to: ->(published, post, column) { post.published_at = Time.now if published == "true" }
+          to_proc.call(csv_value, model, column)
         else
-          raise ArgumentError, "`to` proc can only have 1 or 2 arguments"
+          raise ArgumentError, "`to` proc can only have up to 3 arguments"
         end
       else
         attribute = column_definition.attribute
